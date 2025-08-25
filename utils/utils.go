@@ -58,3 +58,16 @@ func CreateJWTToken(userId string, username string, isAdmin bool) (string, error
 
 	return tokenString, nil
 }
+
+// token verification
+func JWTVerification(tokenString string) (*jwt.Token, error) {
+	config, _ := config.SetConfig()
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(config.JWT_SECRET), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, err
+	}
+	return token, nil
+}

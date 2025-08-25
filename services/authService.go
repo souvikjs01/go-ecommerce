@@ -107,7 +107,7 @@ func (a *AuthServiceStruct) LoginService(payload response.LoginResponse) (*model
 		// Store inside the Redis
 
 		// DataBse ddata
-		err := a.db.Database("ecommerce_golang").Collection("users").FindOne(ctx, find_user).Decode(&user)
+		err := a.db.Database("go-ecomm").Collection("users").FindOne(ctx, find_user).Decode(&user)
 		if err != nil {
 			err_chan <- err
 			return
