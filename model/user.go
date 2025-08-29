@@ -17,14 +17,17 @@ const (
 )
 
 type User struct {
-	ID        primitive.ObjectID `bson:"_id" json:"_id"`
-	Username  string             `json:"username"`
-	Email     string             `json:"email"`
-	Gender    Gender             `json:"gender"`
-	Password  string             `json:"password"`
-	IsAdmin   bool               `json:"isAdmin"`
-	CreatedAt time.Time          `json:"createdAt"`
-	UpdatedAt time.Time          `json:"UpdatedAt"`
+	ID           primitive.ObjectID `bson:"_id" json:"_id"`
+	Username     string             `json:"username"`
+	FirstName    string             `json:"firstName"`
+	LastName     string             `json:"lastName"`
+	Email        string             `json:"email"`
+	Gender       Gender             `json:"gender"`
+	ProfileImage *string            `json:"profileImage"`
+	Password     string             `json:"password"`
+	IsAdmin      bool               `json:"isAdmin"`
+	CreatedAt    time.Time          `json:"createdAt"`
+	UpdatedAt    time.Time          `json:"UpdatedAt"`
 }
 
 type UpdateUser struct {
@@ -33,17 +36,20 @@ type UpdateUser struct {
 	Gender   string `json:"gender"`
 }
 
-func NewUser(username, email, gender, password *string) *User {
+func NewUser(username, firstName, lastName, email, gender, profileImage, password *string) *User {
 	hash, _ := utils.HashPassword(*password)
 	return &User{
-		ID:        primitive.NewObjectID(),
-		Username:  *username,
-		Email:     *email,
-		Gender:    Gender(*gender),
-		IsAdmin:   false,
-		Password:  hash,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:           primitive.NewObjectID(),
+		Username:     *username,
+		FirstName:    *firstName,
+		LastName:     *lastName,
+		Email:        *email,
+		Gender:       Gender(*gender),
+		ProfileImage: profileImage,
+		IsAdmin:      false,
+		Password:     hash,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 }
 
