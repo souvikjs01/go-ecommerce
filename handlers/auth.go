@@ -123,17 +123,24 @@ func (h *AuthHandlerStruct) Login(ctx *gin.Context) {
 func (h *AuthHandlerStruct) Logout(ctx *gin.Context) {
 	// clear the cookie
 	ctx.SetCookie("authCookie_golang", "", -1, "/", "localhost", false, true)
-
-	// clear data from Redis database
 	redis_client := utils.GetRedis()
-	redis_client.Del("login_info:username")
-	redis_client.Del("login_info:user_id")
-	redis_client.Del("login_info:email")
-	redis_client.Del("login_info:isAdmin")
 
-	// and then return from that
+	userID := ctx.GetString("userId")
+
+	// build redis key
+	loginKey := fmt.Sprintf("login_info:%s", userID)
+
+	err := redis_client.Del(loginKey).Err()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error logging out",
+		})
+		return
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Logged Out Successfully!",
+		"message": "Logged out successfully!",
 	})
 }
