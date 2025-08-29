@@ -33,10 +33,12 @@ func (h *AuthHandlerStruct) Signup(ctx *gin.Context) {
 			http.StatusInternalServerError,
 			gin.H{
 				"success": false,
-				"error":   errors.New("something went wrong!"),
+				"error":   errors.New("invalid credentials"),
 			},
 		)
+		return
 	}
+
 	user_chan := make(chan *model.User, 32)
 	err_chan := make(chan error, 32)
 
@@ -54,8 +56,8 @@ func (h *AuthHandlerStruct) Signup(ctx *gin.Context) {
 		ctx.JSON(
 			http.StatusInternalServerError,
 			gin.H{
-				"error":   err.Error(),
 				"success": false,
+				"error":   err.Error(),
 			},
 		)
 	case result_user := <-user_chan:
@@ -80,6 +82,7 @@ func (h *AuthHandlerStruct) Login(ctx *gin.Context) {
 				"error":   errors.New("invalid credentials"),
 			},
 		)
+		return
 	}
 
 	// res_chan := make(chan *response.LoginResponse, 32)
@@ -100,8 +103,8 @@ func (h *AuthHandlerStruct) Login(ctx *gin.Context) {
 		ctx.JSON(
 			http.StatusInternalServerError,
 			gin.H{
-				"error":   err.Error(),
 				"success": false,
+				"error":   err.Error(),
 			},
 		)
 	case res_response := <-user_chan:
