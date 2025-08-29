@@ -40,16 +40,25 @@ func (a *AuthServiceStruct) SignUpService(req *request.SignupRequest) (*model.Us
 		return nil, fmt.Errorf("invalid gender: must be male, female, or other")
 	}
 
-	if req.Username == "" || req.Email == "" || req.Password == "" {
+	if req.Username == "" || req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" {
 		return nil, errors.New("missing required fields")
 	}
-	newUser := model.NewUser(&req.Username, &req.Email, &req.Password, &req.Gender)
+	newUser := model.NewUser(
+		&req.Username,
+		&req.FirstName,
+		&req.LastName,
+		&req.Email,
+		&req.Gender,
+		req.ProfileImage,
+		&req.Password,
+	)
 
 	errChan := make(chan error, 32)
 	userChan := make(chan model.User, 32)
 
 	find_user := bson.M{
 		"username": req.Username,
+		"email":    req.Email,
 	}
 
 	go func() {
@@ -103,7 +112,7 @@ func (a *AuthServiceStruct) LoginService(payload request.LoginRequest) (*model.U
 	if strings.TrimSpace(payload.Password) == "" || strings.TrimSpace(payload.Username) == "" {
 		return nil, "", errors.New("invalid credentials")
 	}
-	fmt.Println("hello3-------------")
+
 	go func() {
 		defer func() {
 			close(loggedIn_user_chan)
@@ -126,35 +135,31 @@ func (a *AuthServiceStruct) LoginService(payload request.LoginRequest) (*model.U
 			return
 		}
 		redis_client := utils.GetRedis()
-		redRes1, err := redis_client.Set("login_info:username", user.Username, 24*time.Hour).Result()
-		if err != nil {
-			err_chan <- err
-			return
-		}
-		redRes2, err := redis_client.Set("login_info:user_id", user.ID.Hex(), 24*time.Hour).Result()
-		if err != nil {
-			err_chan <- err
-			return
-		}
-		redRes3, err := redis_client.Set("login_info:email", user.Email, 24*time.Hour).Result()
-		if err != nil {
-			err_chan <- err
-			return
-		}
-		redRes4, err := redis_client.Set("login_info:isAdmin", user.IsAdmin, 24*time.Hour).Result()
 
-		fmt.Println("red_res")
-		fmt.Println(redRes1)
-		fmt.Println(redRes2)
-		fmt.Println(redRes3)
-		fmt.Println(redRes4)
+		loginKey := fmt.Sprintf("login_info:%s", user.ID.Hex())
+		userMap := map[string]interface{}{
+			"username":  user.Username,
+			"user_id":   user.ID.Hex(),
+			"email":     user.Email,
+			"isAdmin":   user.IsAdmin,
+			"firstName": user.FirstName,
+			"lastName":  user.LastName,
+		}
+		if user.ProfileImage != nil {
+			userMap["profileImage"] = *user.ProfileImage
+		}
 
-		if err != nil {
+		if err := redis_client.HMSet(loginKey, userMap).Err(); err != nil {
 			err_chan <- err
 			return
 		}
 
-		redis_login_result := redis_client.Get("login_info")
+		if err := redis_client.Expire(loginKey, 24*time.Hour).Err(); err != nil {
+			err_chan <- err
+			return
+		}
+
+		redis_login_result := redis_client.Get(loginKey)
 		fmt.Println("redis_login_result")
 		fmt.Println(redis_login_result)
 		// fmt.Println(user)
