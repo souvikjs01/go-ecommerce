@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/souvikjs01/go-ecommerce/model"
-	"github.com/souvikjs01/go-ecommerce/response"
+	"github.com/souvikjs01/go-ecommerce/request"
 	"github.com/souvikjs01/go-ecommerce/services"
 	"github.com/souvikjs01/go-ecommerce/utils"
 )
@@ -26,7 +27,7 @@ func NewAuthHandler(services services.AuthService) *AuthHandlerStruct {
 
 // Signup handler
 func (h *AuthHandlerStruct) Signup(ctx *gin.Context) {
-	var user *model.User
+	var user *request.SignupRequest
 
 	if err := ctx.ShouldBindJSON(&user); err != nil {
 		ctx.JSON(
@@ -73,13 +74,13 @@ func (h *AuthHandlerStruct) Signup(ctx *gin.Context) {
 
 // Login Handler
 func (h *AuthHandlerStruct) Login(ctx *gin.Context) {
-	var payload response.LoginResponse
+	var payload request.LoginRequest
 	if err := ctx.ShouldBindJSON(&payload); err != nil {
 		ctx.JSON(
 			http.StatusInternalServerError,
 			gin.H{
 				"success": false,
-				"error":   errors.New("invalid credentials"),
+				"error":   fmt.Errorf("invalid credentials %s", err),
 			},
 		)
 		return
