@@ -8,11 +8,19 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+type Gender string
+
+const (
+	Male   Gender = "male"
+	Female Gender = "female"
+	Other  Gender = "other"
+)
+
 type User struct {
 	ID        primitive.ObjectID `bson:"_id" json:"_id"`
 	Username  string             `json:"username"`
 	Email     string             `json:"email"`
-	Gender    string             `json:"gender"`
+	Gender    Gender             `json:"gender"`
 	Password  string             `json:"password"`
 	IsAdmin   bool               `json:"isAdmin"`
 	CreatedAt time.Time          `json:"createdAt"`
@@ -31,7 +39,7 @@ func NewUser(username, email, gender, password *string) *User {
 		ID:        primitive.NewObjectID(),
 		Username:  *username,
 		Email:     *email,
-		Gender:    *gender,
+		Gender:    Gender(*gender),
 		IsAdmin:   false,
 		Password:  hash,
 		CreatedAt: time.Now(),
