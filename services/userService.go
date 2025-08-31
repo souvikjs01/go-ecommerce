@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/souvikjs01/go-ecommerce/model"
+	"github.com/souvikjs01/go-ecommerce/request"
 	"github.com/souvikjs01/go-ecommerce/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -16,7 +17,7 @@ import (
 
 type UserService interface {
 	GetMyProfile(userId string) (*model.User, error)
-	UpdateMyProfile(updateUserData *model.UpdateUser, userId *string) (*model.User, error)
+	UpdateMyProfile(updateUserData *request.UpdateRequest, userId *string) (*model.User, error)
 	DeleteMyProfile(userId string) (*model.User, error)
 	GetUserProfile(userID string) (*model.User, error)
 	GetRandomUsers(userNum int) (*[]model.User, error)
@@ -41,19 +42,13 @@ func (u *UserServiceStruct) GetMyProfile(userId string) (*model.User, error) {
 		return nil, fmt.Errorf("redis connection failed")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	userInfo := make(chan model.User, 32)
 	errChan := make(chan error, 32)
 
 	var user model.User
-
-	// Chk the UserId is valid or not
-	user_id := redis_client.Get("login_info:user_id")
-	if user_id.Val() != userId {
-		errChan <- fmt.Errorf("invalid")
-	}
 
 	go func() {
 		defer func() {
@@ -67,17 +62,12 @@ func (u *UserServiceStruct) GetMyProfile(userId string) (*model.User, error) {
 			errChan <- err
 		}
 
-		// fmt.Println("obj_Id")
-		// fmt.Println(obj_Id)
-
 		get_user_id := bson.M{
 			"_id": obj_Id,
 		}
 
 		// chk in Redis
 		user_info_val := redis_client.Get("user_info" + userId).Val()
-		fmt.Println("user_info_val")
-		fmt.Println(user_info_val)
 
 		if user_info_val == "" {
 			fmt.Println("We didn;t get any value")
@@ -89,15 +79,18 @@ func (u *UserServiceStruct) GetMyProfile(userId string) (*model.User, error) {
 
 			// Store this information to Redis
 			to_store_user_in_redis := &model.User{
-				ID:        user.ID,
-				Username:  user.Username,
-				Email:     user.Email,
-				Gender:    user.Gender,
-				IsAdmin:   user.IsAdmin,
-				CreatedAt: user.CreatedAt,
-				UpdatedAt: user.UpdatedAt,
+				ID:           user.ID,
+				Username:     user.Username,
+				Email:        user.Email,
+				Gender:       user.Gender,
+				IsAdmin:      user.IsAdmin,
+				CreatedAt:    user.CreatedAt,
+				UpdatedAt:    user.UpdatedAt,
+				FirstName:    user.FirstName,
+				LastName:     user.LastName,
+				ProfileImage: user.ProfileImage,
 			}
-			err = redis_client.Set("user_info"+user.ID.Hex(), to_store_user_in_redis, time.Second*10).Err()
+			err = redis_client.Set("user_info"+user.ID.Hex(), to_store_user_in_redis, 1*time.Hour).Err()
 			if err != nil {
 				errChan <- err
 			}
@@ -105,8 +98,7 @@ func (u *UserServiceStruct) GetMyProfile(userId string) (*model.User, error) {
 		} else {
 			got_data_from_redis := redis_client.Get("user_info" + userId)
 			fmt.Println("got_data_from_redis")
-			fmt.Println(got_data_from_redis.Val())
-			// Decode Redis data into user struct
+
 			err = json.Unmarshal([]byte(got_data_from_redis.Val()), &user)
 			if err != nil {
 				errChan <- err
@@ -127,7 +119,7 @@ func (u *UserServiceStruct) GetMyProfile(userId string) (*model.User, error) {
 }
 
 // Update the UserProfile
-func (u *UserServiceStruct) UpdateMyProfile(user_data *model.UpdateUser, userId *string) (*model.User, error) {
+func (u *UserServiceStruct) UpdateMyProfile(user_data *request.UpdateRequest, userId *string) (*model.User, error) {
 
 	user_chan := make(chan *model.User, 32)
 	err_chan := make(chan error, 32)
@@ -141,80 +133,82 @@ func (u *UserServiceStruct) UpdateMyProfile(user_data *model.UpdateUser, userId 
 		return nil, fmt.Errorf("redis connection failed")
 	}
 
-	r_data := redis_client.MGet("login_info:username", "login_info:user_id", "login_info:email", "login_info:isAdmin")
-
-	//  Match the redis userId with the provided userId
-	if r_data.Val()[1] != *userId {
-		err_chan <- fmt.Errorf("invalid userId pProvided")
-	}
-	//  Update the UserId in database
-	var user *model.User
-
 	go func() {
 		defer func() {
 			close(user_chan)
 			close(err_chan)
 		}()
 
-		convert_user_to_objectId, err := primitive.ObjectIDFromHex(r_data.Val()[1].(string))
-		if err != nil {
-			err_chan <- err
-		}
-		fmt.Printf("UserId to Object ID: %v", convert_user_to_objectId)
+		loginKey := fmt.Sprintf("login_info:%s", *userId)
 
-		// find the user in our dataBase and then update it
-		to_find_user_filter := bson.M{
-			"_id": convert_user_to_objectId,
-		}
-
-		err = u.db.Database("go-ecomm").Collection("users").FindOne(ctx, to_find_user_filter).Decode(&user)
+		r_data, err := redis_client.HGetAll(loginKey).Result()
 		if err != nil {
-			err_chan <- err
+			err_chan <- fmt.Errorf("error fetching user from redis: %v", err)
 			return
 		}
-		fmt.Println("user--->", *user)
 
-		if (*user_data).Email != "" {
-			(*user).Email = (*user_data).Email
+		if r_data["user_id"] != *userId {
+			err_chan <- fmt.Errorf("invalid userId provided")
+			return
 		}
 
-		if (*user_data).Gender != "" {
-			(*user).Gender = (*user_data).Gender
-		}
-		if (*user_data).Username != "" {
-			(*user).Username = (*user_data).Username
+		objID, err := primitive.ObjectIDFromHex(*userId)
+		if err != nil {
+			err_chan <- fmt.Errorf("invalid objectId: %v", err)
+			return
 		}
 
+		// find the user in MongoDB
+		var user model.User
+		filter := bson.M{"_id": objID}
+		err = u.db.Database("go-ecomm").Collection("users").FindOne(ctx, filter).Decode(&user)
+		if err != nil {
+			err_chan <- fmt.Errorf("user not found: %v", err)
+			return
+		}
+
+		// update fields if present
+		updateData := bson.M{}
+		if user_data.Username != nil {
+			user.Username = *user_data.Username
+			updateData["username"] = *user_data.Username
+		}
+		if user_data.FirstName != nil {
+			user.FirstName = *user_data.FirstName
+			updateData["firstName"] = *user_data.FirstName
+		}
+		if user_data.LastName != nil {
+			user.LastName = *user_data.LastName
+			updateData["lastName"] = *user_data.LastName
+		}
+		if user_data.ProfileImage != nil {
+			user.ProfileImage = user_data.ProfileImage
+			updateData["profileImage"] = *user_data.ProfileImage
+		}
 		user.UpdatedAt = time.Now()
-		fmt.Println("user")
-		fmt.Println(*user)
+		updateData["updatedAt"] = user.UpdatedAt
 
-		// update in the dataavbase
-		to_update := bson.M{
-			"$set": bson.M{
-				"username": (*user).Username,
-				"email":    (*user).Email,
-				"gender":   (*user).Gender,
-			},
-		}
-
-		var update_result *model.User
-		err = u.db.Database("go-ecomm").Collection("users").FindOneAndUpdate(ctx, to_find_user_filter, to_update).Decode(&update_result)
+		// apply update in MongoDB
+		_, err = u.db.Database("go-ecomm").Collection("users").
+			UpdateOne(ctx, filter, bson.M{"$set": updateData})
 		if err != nil {
-			err_chan <- err
+			err_chan <- fmt.Errorf("failed to update user in DB: %v", err)
 			return
 		}
-		fmt.Println("update_result")
-		fmt.Println(*update_result)
-		// also update the data in our Redis
-		redis_client.Del("login_info:username")
-		redis_client.Del("login_info:email")
 
-		// add the new info to the redis
-		redis_client.Set("login_info:username", (*user).Username, 0)
-		redis_client.Set("login_info:email", (*user).Email, 0)
+		// update Redis hash
+		redisUpdate := map[string]interface{}{}
+		for k, v := range updateData {
+			redisUpdate[k] = v
+		}
+		if len(redisUpdate) > 0 {
+			if err := redis_client.HMSet(loginKey, redisUpdate).Err(); err != nil {
+				err_chan <- fmt.Errorf("failed to update redis: %v", err)
+				return
+			}
+		}
 
-		user_chan <- user
+		user_chan <- &user
 	}()
 
 	select {
@@ -242,10 +236,7 @@ func (u *UserServiceStruct) DeleteMyProfile(userId string) (*model.User, error) 
 		err_chan <- fmt.Errorf("redis connection failed")
 	}
 
-	get_id_from_redis := redis_client.Get("login_info:user_id").Val()
-	if get_id_from_redis == "" {
-		err_chan <- fmt.Errorf("invalid userId provided")
-	}
+	loginKey := fmt.Sprintf("login_info:%s", userId)
 
 	user_Object_id, err := primitive.ObjectIDFromHex(userId)
 	if err != nil {
@@ -262,9 +253,13 @@ func (u *UserServiceStruct) DeleteMyProfile(userId string) (*model.User, error) 
 		}()
 
 		// delete the detilas from the Redis
-		redis_client.Del("login_info:email", "login_info:isAdmin", "login_info:user_id", "login_info:username")
-		// fmt.Println("del_res")
-		// fmt.Println(del_res)
+		err := redis_client.Del(loginKey).Err()
+		if err != nil {
+			err_chan <- fmt.Errorf("error deleting user data: %v", err)
+			return
+		}
+
+		fmt.Println("User data deleted successfully from redis")
 	}()
 
 	wg.Add(1)
@@ -307,116 +302,87 @@ func (u *UserServiceStruct) GetUserProfile(userID string) (*model.User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	user_chan := make(chan *model.User, 32)
-	err_chan := make(chan error, 32)
+	userChan := make(chan *model.User, 32)
+	errChan := make(chan error, 32)
 
-	// CHK in Redis
 	redisClient := utils.GetRedis()
-	var user *model.User
-
 	if redisClient == nil {
-		err_chan <- fmt.Errorf("redis connection failed")
+		return nil, fmt.Errorf("redis connection failed")
 	}
 
-	redis_result := redisClient.HGet("user_info"+userID, "userInfo")
-	// fmt.Println("redis_result.Val()")
-	// fmt.Println(redis_result.Result())
+	userKey := fmt.Sprintf("user_info:%s", userID)
 
-	user_object_id, err := primitive.ObjectIDFromHex(userID)
+	// Check if data exists in Redis
+	exist, err := redisClient.Exists(userKey).Result()
 	if err != nil {
-		err_chan <- err
+		return nil, fmt.Errorf("redis exists check failed: %v", err)
 	}
 
-	to_find_user := bson.M{
-		"_id": user_object_id,
-	}
-
-	user_is_there := redis_result.Val()
-
-	if user_is_there == "" {
-		// Get Data from the Mongodb Database
+	if exist == 0 {
+		// Cache miss → fetch from MongoDB
 		go func() {
-			// fmt.Println("User is not there inside the Redis database")
-			// fmt.Println("ID to match")
-			// fmt.Println(user_object_id)
-			err := u.db.Database("go-ecomm").Collection("users").FindOne(ctx, to_find_user).Decode(&user)
+			defer close(userChan)
+			defer close(errChan)
+
+			userObjectID, err := primitive.ObjectIDFromHex(userID)
 			if err != nil {
-				fmt.Println("Err while decoding the data")
-				fmt.Println(err)
-				err_chan <- err
+				errChan <- fmt.Errorf("invalid user ID: %v", err)
 				return
 			}
 
-			// Set to the Redis for some time
-			is_redis_updated := redisClient.HSet("user_info"+userID, "userInfo", user)
+			toFindUser := bson.M{"_id": userObjectID}
+			var user model.User
 
-			// Hmget in Hash
-			is_redis_updated_with_hmset := redisClient.HMSet(
-				"user_info"+userID,
-				map[string]interface{}{
-					"userInfo": user,
-					"username": user.Username,
-				})
-
-			if err := is_redis_updated_with_hmset.Err(); err != nil {
-				err_chan <- err
+			err = u.db.Database("go-ecomm").
+				Collection("users").
+				FindOne(ctx, toFindUser).
+				Decode(&user)
+			if err != nil {
+				errChan <- err
+				return
 			}
 
-			if err := is_redis_updated.Err(); err != nil {
-				err_chan <- err
+			// Convert to JSON for Redis
+			userBytes, err := json.Marshal(user)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to marshal user: %v", err)
+				return
 			}
 
-			user_chan <- user
+			if err := redisClient.Set(userKey, userBytes, 1*time.Hour).Err(); err != nil {
+				errChan <- fmt.Errorf("failed to set user in redis: %v", err)
+				return
+			}
+
+			userChan <- &user
 		}()
 	} else {
-		fmt.Println("From Redis")
+		// Cache hit → read from Redis
+		go func() {
+			defer close(userChan)
+			defer close(errChan)
 
-		// hmget  user_info [key] userInfo [Field] "username" [Field]
-		h_result := redisClient.HMGet("user_info"+userID, "userInfo", "username").Val()
-		fmt.Println("h_result")
-		fmt.Println(h_result)
+			userBytes, err := redisClient.Get(userKey).Bytes()
+			if err != nil {
+				errChan <- fmt.Errorf("failed to get user from redis: %v", err)
+				return
+			}
 
-		// get all
-		data, err := redisClient.HGetAll("user_info" + userID).Result()
-		fmt.Println("data")
-		fmt.Println(data)
+			var user model.User
+			if err := json.Unmarshal(userBytes, &user); err != nil {
+				errChan <- fmt.Errorf("failed to unmarshal user: %v", err)
+				return
+			}
 
-		// exists
-		isExists, err := redisClient.HExists("user_info"+userID, "userInfo").Result()
-		if err != nil {
-			err_chan <- err
-		}
-		fmt.Println("isExists")
-		fmt.Println(isExists)
-
-		// keys
-		keys, err := redisClient.HKeys("user_info" + userID).Result()
-		if err != nil {
-			err_chan <- err
-		}
-		fmt.Println("keys")
-		fmt.Println(keys)
-
-		// values
-		values, err := redisClient.HVals("user_info" + userID).Result()
-		if err != nil {
-			err_chan <- err
-		}
-		fmt.Println("values")
-		fmt.Println(values)
-
-		// Unmarshal the user data to JSON
-		err = json.Unmarshal([]byte(user_is_there), &user)
-		if err != nil {
-			err_chan <- err
-		}
-		user_chan <- user
+			fmt.Println("From Redis Cache")
+			userChan <- &user
+		}()
 	}
 
 	select {
-	case user_data := <-user_chan:
-		return user_data, nil
-	case err := <-err_chan:
+	case userData := <-userChan:
+		return userData, nil
+	case err := <-errChan:
 		return nil, err
 	case <-ctx.Done():
 		return nil, context.DeadlineExceeded
@@ -680,7 +646,7 @@ func (u *UserServiceStruct) GetRecentlyJoinedUsers(userNum int, userId string) (
 
 // search for user using its username email (not me)
 func (u *UserServiceStruct) SearchUser(query, userId string) (*[]model.User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	users_chan := make(chan []model.User, 32)
@@ -689,68 +655,51 @@ func (u *UserServiceStruct) SearchUser(query, userId string) (*[]model.User, err
 	var users []model.User
 
 	// not me
-	// gender, username, email := or
 	obj_user_id, err := primitive.ObjectIDFromHex(userId)
 	if err != nil {
 		err_chan <- fmt.Errorf("parsing user id from hex is failed: %v", err)
 	}
 
-	to_query_user := bson.M{
+	toQueryUser := bson.M{
 		"$and": bson.A{
-			bson.M{
-				"_id": bson.M{
-					"$ne": obj_user_id,
-				},
-			},
-			bson.M{
-				"$or": bson.A{
-					// username
-					bson.M{
-						"username": bson.M{
-							"$regex":   query,
-							"$options": "i",
-						},
-					},
-					// email
-					bson.M{
-						"email": bson.M{
-							"$regex":   query,
-							"$options": "i",
-						},
-					},
-					// gender
-					bson.M{
-						"gender": query,
-					},
-				},
+			bson.M{"_id": bson.M{"$ne": obj_user_id}}, // exclude current user
+			bson.M{"$or": bson.A{
+				bson.M{"username": bson.M{"$regex": query, "$options": "i"}},
+				bson.M{"email": bson.M{"$regex": query, "$options": "i"}},
+				bson.M{"firstname": bson.M{"$regex": query, "$options": "i"}},
+				bson.M{"lastname": bson.M{"$regex": query, "$options": "i"}},
+				bson.M{"gender": query},
 			}},
+		},
 	}
+
 	// search in Direct mongoDb
 	go func() {
-		cur, err := u.db.Database("go-ecomm").Collection("users").Find(ctx, to_query_user)
+		cur, err := u.db.Database("go-ecomm").Collection("users").Find(ctx, toQueryUser)
 		if err != nil {
 			fmt.Println("Error from get users from the database MongoDB")
 			err_chan <- err
 			return
 		}
 
+		defer cur.Close(ctx)
+
 		for cur.Next(ctx) {
 			var user model.User
 			err := cur.Decode(&user)
-			// fmt.Printf("User: %v", user)
 			if err != nil {
 				err_chan <- err
 				return
 			}
-			(users) = append(users, user)
+			users = append(users, user)
 		}
+
 		users_chan <- users
 	}()
 
 	for {
 		select {
 		case users_data := <-users_chan:
-			// fmt.Printf("Users data: %v", users_data)
 			return &users_data, nil
 		case err := <-err_chan:
 			return nil, err
