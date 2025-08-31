@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/souvikjs01/go-ecommerce/model"
+	"github.com/souvikjs01/go-ecommerce/request"
 	"github.com/souvikjs01/go-ecommerce/services"
 )
 
@@ -45,14 +46,16 @@ func (h *UserHandlerStruct) GetMyProfile(ctx *gin.Context) {
 		ctx.JSON(
 			http.StatusOK,
 			gin.H{
-				"message": "User Profile", "data": user,
+				"message": "User Profile",
+				"data":    user,
 			},
 		)
 	case err := <-err_chan:
 		ctx.JSON(
 			http.StatusInternalServerError,
 			gin.H{
-				"message": "Error fetching user profile", "error": err.Error(),
+				"message": "Error fetching user profile",
+				"error":   err.Error(),
 			},
 		)
 	}
@@ -61,7 +64,7 @@ func (h *UserHandlerStruct) GetMyProfile(ctx *gin.Context) {
 
 // Update the UserProfile
 func (h *UserHandlerStruct) UpdateUserProfile(ctx *gin.Context) {
-	var update_user model.UpdateUser
+	var update_user request.UpdateRequest
 	if err := ctx.ShouldBindJSON(&update_user); err != nil {
 		ctx.JSON(
 			http.StatusBadRequest,
@@ -80,7 +83,7 @@ func (h *UserHandlerStruct) UpdateUserProfile(ctx *gin.Context) {
 		ctx.JSON(
 			http.StatusInternalServerError,
 			gin.H{
-				"message": "Error updating user profile",
+				"success": false,
 				"error":   err.Error(),
 			},
 		)
