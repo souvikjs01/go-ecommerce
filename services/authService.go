@@ -154,7 +154,7 @@ func (a *AuthServiceStruct) LoginService(payload request.LoginRequest) (*model.U
 			return
 		}
 
-		if err := redis_client.Expire(loginKey, 24*time.Hour).Err(); err != nil {
+		if err := redis_client.Expire(loginKey, 1*time.Hour).Err(); err != nil {
 			err_chan <- err
 			return
 		}
