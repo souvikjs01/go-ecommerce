@@ -14,3 +14,10 @@ type SignupRequest struct {
 	Gender       string  `json:"gender" binding:"required,oneof=male female other"`
 	ProfileImage *string `json:"profileImage"`
 }
+
+type UpdateRequest struct {
+	Username     *string `json:"username"`
+	FirstName    *string `json:"firstName"`
+	LastName     *string `json:"lastName"`
+	ProfileImage *string `json:"profileImage"`
+}
