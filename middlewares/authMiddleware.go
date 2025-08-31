@@ -12,25 +12,36 @@ func RequireAuth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		cookie_string, err := ctx.Cookie("authCookie_golang")
 		if err != nil {
-			ctx.JSON(401, gin.H{"error": "Unauthorized"})
+			ctx.JSON(401, gin.H{
+				"error": "Unauthorized",
+			})
 			return
 		}
 		if cookie_string == "" {
-			ctx.JSON(401, gin.H{"error": "Unauthorized"})
+			ctx.JSON(401, gin.H{
+				"error": "Unauthorized",
+			})
 			return
 		}
+
 		// Verify The Token which is stored in our Cookie
 		token, err := utils.JWTVerification(cookie_string)
 		if err != nil {
-			ctx.JSON(401, gin.H{"error": "Unauthorized"})
+			ctx.JSON(401, gin.H{
+				"error": "Unauthorized",
+			})
 			return
 		}
+
 		claims, ok := token.Claims.(jwt.MapClaims)
 		fmt.Println(claims)
 		if !ok || !token.Valid {
-			ctx.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
+			ctx.AbortWithStatusJSON(401, gin.H{
+				"error": "Unauthorized",
+			})
 			return
 		}
+
 		// map[exp:1.73735283e+09 id:6789ef3f0747916de714e421 isAdmin:false username:itsmonday]
 		ctx.Set("userId", claims["id"])
 		ctx.Set("isAdmin", claims["isAdmin"])
