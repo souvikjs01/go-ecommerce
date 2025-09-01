@@ -30,12 +30,6 @@ type User struct {
 	UpdatedAt    time.Time          `json:"UpdatedAt"`
 }
 
-type UpdateUser struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Gender   string `json:"gender"`
-}
-
 func NewUser(username, firstName, lastName, email, gender, profileImage, password *string) *User {
 	hash, _ := utils.HashPassword(*password)
 	return &User{
