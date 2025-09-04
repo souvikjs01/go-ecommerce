@@ -16,8 +16,8 @@ type Order struct {
 	Products  []ProductInfo      `json:"products"`
 	Amount    int                `json:"amount"`
 	UserId    primitive.ObjectID `json:"userId"`
-	Address   string             `json:"address" validate:"required,min=2,max=20"`
-	Status    string             `json:"status" validate:"required" default:"processing"`
+	Address   string             `json:"address"`
+	Status    string             `json:"status"`
 	CreatedAt time.Time          `json:"createdAt"`
 	UpdatedAt time.Time          `json:"updatedAt"`
 }
