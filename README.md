@@ -5,19 +5,19 @@ Built with Golang and Gin Framework ensuring scalability, performance, and secur
 
 🚀 Features
 
-User Management: Registration, authentication, profile management
-Product Catalog: CRUD operations for products and categories
-Order Processing: Shopping cart, checkout, order tracking
-Admin Panel: Administrative functions and user management
-Redis Caching: High-performance data caching layer
-MongoDB Integration: Scalable NoSQL database storage
-RESTful API: Clean and intuitive API endpoints
-JWT Authentication: Secure token-based authentication
-Concurrency Safe: Goroutines and channel-based operations
+- **User Management**: Registration, authentication, profile management <br>
+- **Product Catalog** : CRUD operations for products and categories <br>
+- **Order Processing**: Shopping cart, checkout, order tracking <br>
+- **Admin Panel**: Administrative functions and user management <br>
+- **Redis Caching**: High-performance data caching layer <br>
+- **MongoDB Integration**: Scalable NoSQL database storage <br>
+- **RESTful API**: Clean and intuitive API endpoints <br>
+- **JWT Authentication**: Secure token-based authentication <br>
+- **Concurrency Safe**: Goroutines and channel-based operations <br>
 
 🛠️ Tech Stack
 
-Language: Go 1.19+
+Language: Go 1.20+
 Web Framework: Gin
 Database: MongoDB
 Caching: Redis
