@@ -4,7 +4,6 @@ A RESTful API backend for an E-commerce system that provides authentication, use
 Built with Golang and Gin Framework ensuring scalability, performance, and security.
 
 🚀 Features
-
 - **User Management**: Registration, authentication, profile management <br>
 - **Product Catalog** : CRUD operations for products and categories <br>
 - **Order Processing**: Shopping cart, checkout, order tracking <br>
@@ -16,9 +15,10 @@ Built with Golang and Gin Framework ensuring scalability, performance, and secur
 - **Concurrency Safe**: Goroutines and channel-based operations <br>
 
 🛠️ Tech Stack
-
 Language: Go 1.20+
 Web Framework: Gin
 Database: MongoDB
 Caching: Redis
 Authentication: JWT
+
+<img width="1334" height="602" alt="ecommerce" src="https://github.com/user-attachments/assets/2e6a64b2-27dc-45d6-9457-6f357fa1dccf" />
