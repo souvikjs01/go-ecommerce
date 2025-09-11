@@ -64,7 +64,7 @@ func (h *CartHandlerStruct) AddToCartHandler(ctx *gin.Context) {
 		case err := <-errChan:
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"err":     err.Error(),
+				"error":   err.Error(),
 			})
 			return
 		}
@@ -89,6 +89,12 @@ func (h *CartHandlerStruct) GetMyCart(ctx *gin.Context) {
 
 	for {
 		select {
+		case <-ctx.Done():
+			ctx.JSON(http.StatusRequestTimeout, gin.H{
+				"success": false,
+				"error":   "request time exceeded",
+			})
+			return
 		case cart := <-cartChan:
 			ctx.JSON(http.StatusOK, gin.H{
 				"success": true,
@@ -98,7 +104,7 @@ func (h *CartHandlerStruct) GetMyCart(ctx *gin.Context) {
 		case err := <-errChan:
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"err":     err.Error(),
+				"error":   err.Error(),
 			})
 			return
 		}

@@ -167,15 +167,19 @@ func (c *CartServiceStruct) GetCartDetails(userId string) (*model.Cart, error) {
 		errChan <- fmt.Errorf("invalid userId: %w", err)
 	}
 
-	filter := bson.M{"userId": usrObjID}
+	filter := bson.M{"userid": usrObjID}
 
-	var cartData model.Cart
 	go func() {
+		var cartData model.Cart
 		err = c.db.Database("go-ecomm").Collection("carts").FindOne(ctx, filter).Decode(&cartData)
-		if err != nil {
+		if err == mongo.ErrNoDocuments {
+			errChan <- err
+			return
+		} else if err != nil {
 			errChan <- err
 			return
 		}
+
 		cartChan <- &cartData
 	}()
 	for {
