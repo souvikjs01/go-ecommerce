@@ -53,3 +53,8 @@ type CreateOrderPayload struct {
 	Address  string              `json:"address" binding:"required,min=4,max=20"`
 	Status   string              `json:"status" binding:"required"`
 }
+
+type AddToCartPayload struct {
+	ProductID string `json:"product_id" binding:"required"`
+	Quantity  int    `json:"quantity" binding:"required,min=1"`
+}

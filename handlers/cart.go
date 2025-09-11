@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/souvikjs01/go-ecommerce/model"
+	"github.com/souvikjs01/go-ecommerce/request"
 	"github.com/souvikjs01/go-ecommerce/services"
 )
 
@@ -19,14 +20,13 @@ func NewCartHandler(service services.CartService) *CartHandlerStruct {
 	}
 }
 
-// NCh :- New Cart Handler
 func (h *CartHandlerStruct) AddToCartHandler(ctx *gin.Context) {
-	var cart model.Cart
+	var cart request.AddToCartPayload
 	userId := ctx.GetString("userId")
 
 	if err := ctx.ShouldBindJSON(&cart); err != nil {
 		ctx.JSON(
-			http.StatusInternalServerError,
+			http.StatusBadRequest,
 			gin.H{
 				"success": false,
 				"err":     fmt.Errorf("error in geting the cart data"),
@@ -49,6 +49,12 @@ func (h *CartHandlerStruct) AddToCartHandler(ctx *gin.Context) {
 
 	for {
 		select {
+		case <-ctx.Done():
+			ctx.JSON(http.StatusRequestTimeout, gin.H{
+				"success": false,
+				"error":   "request time out",
+			})
+			return
 		case cart := <-cartChan:
 			ctx.JSON(http.StatusOK, gin.H{
 				"success": true,

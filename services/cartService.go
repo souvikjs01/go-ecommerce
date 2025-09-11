@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/souvikjs01/go-ecommerce/model"
+	"github.com/souvikjs01/go-ecommerce/request"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type CartService interface {
-	AddToCart(cart *model.Cart, userID string) (*model.Cart, error)
+	AddToCart(cart *request.AddToCartPayload, userID string) (*model.Cart, error)
 	GetCartDetails(userId string) (*model.Cart, error) // debug
 	DeleteCart(userId, cartId string) (*model.Cart, error)
 	GetAllCarts() (*[]model.Cart, error)
@@ -30,7 +31,7 @@ func NewCartService(db *mongo.Client) *CartServiceStruct {
 	}
 }
 
-func (c *CartServiceStruct) AddToCart(cart *model.Cart, userID string) (*model.Cart, error) {
+func (c *CartServiceStruct) AddToCart(cart *request.AddToCartPayload, userID string) (*model.Cart, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
@@ -43,25 +44,103 @@ func (c *CartServiceStruct) AddToCart(cart *model.Cart, userID string) (*model.C
 		errChan <- err
 	}
 
-	new_cart := model.NewCart(&(*cart).Products, &user_objId)
-	var wg sync.WaitGroup
-	wg.Add(1)
+	productObjID, err := primitive.ObjectIDFromHex(cart.ProductID)
+	if err != nil {
+		errChan <- err
+	}
 
 	// MongoDB
 	go func() {
-		defer func() {
-			wg.Done()
-		}()
+		defer close(errChan)
+		defer close(cartChan)
 
-		_, err := c.db.Database("go-ecomm").Collection("carts").InsertOne(ctx, new_cart)
-		if err != nil {
-			errChan <- err
+		collection := c.db.Database("go-ecomm").Collection("carts")
+		var existingCart model.Cart
+
+		// Check if user already has a cart
+		err := collection.FindOne(ctx, bson.M{"userid": user_objId}).Decode(&existingCart)
+		if err == mongo.ErrNoDocuments {
+			// No cart exists, create a new one
+			newCart := &model.Cart{
+				ID:     primitive.NewObjectID(),
+				UserId: user_objId,
+				Products: []model.ProductDetails{
+					{
+						ProductID: productObjID,
+						Quantity:  cart.Quantity,
+					},
+				},
+			}
+
+			_, err = collection.InsertOne(ctx, newCart)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to create cart: %w", err)
+				return
+			}
+			cartChan <- newCart
+
+		} else if err != nil {
+			errChan <- fmt.Errorf("failed to query cart: %w", err)
 			return
 		}
-		cartChan <- new_cart
-	}()
 
-	wg.Wait()
+		// Cart exists, check if product already in cart
+		productExists := false
+		for _, product := range existingCart.Products {
+			if product.ProductID == productObjID {
+				productExists = true
+				break
+			}
+		}
+
+		if productExists {
+			// Product exists, update quantity
+			_, err = collection.UpdateOne(ctx,
+				bson.M{
+					"_id":                existingCart.ID,
+					"userid":             user_objId,
+					"products.productid": productObjID,
+				},
+				bson.M{
+					"$inc": bson.M{"products.$.quantity": cart.Quantity},
+				},
+			)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to update product quantity: %w", err)
+				return
+			}
+		} else {
+			// Product doesn't exist, add to cart
+			_, err = collection.UpdateOne(ctx,
+				bson.M{
+					"_id":    existingCart.ID,
+					"userid": user_objId,
+				},
+				bson.M{
+					"$push": bson.M{
+						"products": model.ProductDetails{
+							ProductID: productObjID,
+							Quantity:  cart.Quantity,
+						},
+					},
+				},
+			)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to add product to cart: %w", err)
+				return
+			}
+		}
+
+		// Fetch and return updated cart
+		var updatedCart model.Cart
+		err = collection.FindOne(ctx, bson.M{"userid": user_objId}).Decode(&updatedCart)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to fetch updated cart: %w", err)
+			return
+		}
+
+		cartChan <- &updatedCart
+	}()
 
 	for {
 		select {

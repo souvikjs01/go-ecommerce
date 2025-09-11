@@ -12,11 +12,3 @@ type Cart struct {
 	Products []ProductDetails   `json:"productDetails"`
 	UserId   primitive.ObjectID `json:"userId"`
 }
-
-func NewCart(product *[]ProductDetails, userId *primitive.ObjectID) *Cart {
-	return &Cart{
-		ID:       primitive.NewObjectID(),
-		Products: *product,
-		UserId:   *userId,
-	}
-}
