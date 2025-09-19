@@ -31,7 +31,7 @@ func (h *AuthHandlerStruct) Signup(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&user); err != nil {
 		ctx.JSON(
-			http.StatusInternalServerError,
+			http.StatusBadRequest,
 			gin.H{
 				"success": false,
 				"error":   errors.New("invalid credentials"),
@@ -41,26 +41,46 @@ func (h *AuthHandlerStruct) Signup(ctx *gin.Context) {
 	}
 
 	user_chan := make(chan *model.User, 32)
-	err_chan := make(chan error, 32)
+	err_chan := make(chan *model.ErrMsg, 32)
 
 	go func() {
 		user, err := h.services.SignUpService(user)
 		if err != nil {
-			err_chan <- err
+			err_chan <- &model.ErrMsg{
+				Err:  err,
+				Code: 500,
+			}
 			return
 		}
 		user_chan <- user
 	}()
 
 	select {
+	case <-ctx.Done():
+		ctx.JSON(http.StatusRequestTimeout, gin.H{
+			"success": false,
+			"error":   "request time out",
+		})
+
 	case err := <-err_chan:
-		ctx.JSON(
-			http.StatusInternalServerError,
-			gin.H{
-				"success": false,
-				"error":   err.Error(),
-			},
-		)
+		switch err.Code {
+		case 500:
+			ctx.JSON(
+				http.StatusBadRequest,
+				gin.H{
+					"success": false,
+					"error":   err.Error(),
+				},
+			)
+		case 400:
+			ctx.JSON(
+				http.StatusInternalServerError,
+				gin.H{
+					"success": false,
+					"error":   err.Error(),
+				},
+			)
+		}
 	case result_user := <-user_chan:
 		ctx.JSON(
 			http.StatusAccepted,

@@ -53,13 +53,8 @@ func (a *AuthServiceStruct) SignUpService(req *request.SignupRequest) (*model.Us
 		&req.Password,
 	)
 
-	errChan := make(chan error, 32)
+	errChan := make(chan model.ErrMsg, 32)
 	userChan := make(chan model.User, 32)
-
-	find_user := bson.M{
-		"username": req.Username,
-		"email":    req.Email,
-	}
 
 	go func() {
 		defer func() {
@@ -67,21 +62,40 @@ func (a *AuthServiceStruct) SignUpService(req *request.SignupRequest) (*model.Us
 			close(userChan)
 		}()
 
-		err := a.db.Database("go-ecomm").Collection("users").FindOne(ctx, find_user).Decode(&newUser)
+		var existUser *model.User
+		err := a.db.Database("go-ecomm").Collection("users").FindOne(ctx, bson.M{
+			"email": req.Email,
+		}).Decode(&existUser)
 
 		if err == nil {
-			errChan <- fmt.Errorf("user already exists")
+			errChan <- model.ErrMsg{
+				Err:  fmt.Errorf("user with this email already exists"),
+				Code: 400,
+			}
+			return
+		}
+
+		err = a.db.Database("go-ecomm").Collection("users").FindOne(ctx, bson.M{
+			"username": req.Username,
+		}).Decode(&existUser)
+
+		if err == nil {
+			errChan <- model.ErrMsg{
+				Err:  fmt.Errorf("user with this username already exist"),
+				Code: 400,
+			}
 			return
 		}
 
 		// It means that User is not exists in our Database So we need to create a user
-		insert_res, err := a.db.Database("go-ecomm").Collection("users").InsertOne(ctx, newUser)
+		_, err = a.db.Database("go-ecomm").Collection("users").InsertOne(ctx, newUser)
 		if err != nil {
-			errChan <- err
+			errChan <- model.ErrMsg{
+				Err:  err,
+				Code: 500,
+			}
 			return
 		}
-		fmt.Println("insert_res")
-		fmt.Println(insert_res)
 
 		userChan <- *newUser
 
