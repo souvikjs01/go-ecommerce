@@ -97,7 +97,7 @@ func (h *AuthHandlerStruct) Login(ctx *gin.Context) {
 	var payload request.LoginRequest
 	if err := ctx.ShouldBindJSON(&payload); err != nil {
 		ctx.JSON(
-			http.StatusInternalServerError,
+			http.StatusBadRequest,
 			gin.H{
 				"success": false,
 				"error":   fmt.Errorf("invalid credentials %s", err),
@@ -106,7 +106,6 @@ func (h *AuthHandlerStruct) Login(ctx *gin.Context) {
 		return
 	}
 
-	// res_chan := make(chan *response.LoginResponse, 32)
 	user_chan := make(chan *model.User, 32)
 	err_chan := make(chan error, 32)
 
@@ -116,10 +115,25 @@ func (h *AuthHandlerStruct) Login(ctx *gin.Context) {
 			err_chan <- err
 			return
 		}
-		ctx.SetCookie("authCookie_golang", token, 3600, "/", "localhost", false, true) // 3600 in seconds
+		ctx.SetCookie(
+			"authCookie_golang",
+			token,
+			3600,
+			"/",
+			"localhost",
+			false,
+			true,
+		) // 3600 in seconds
+
 		user_chan <- res
 	}()
+
 	select {
+	case <-ctx.Done():
+		ctx.JSON(http.StatusRequestTimeout, gin.H{
+			"success": false,
+			"error":   "request timeout",
+		})
 	case err := <-err_chan:
 		ctx.JSON(
 			http.StatusInternalServerError,

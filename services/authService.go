@@ -133,10 +133,6 @@ func (a *AuthServiceStruct) LoginService(payload request.LoginRequest) (*model.U
 			close(err_chan)
 		}()
 
-		fmt.Println("inside the GoRoutine......")
-		// Store inside the Redis
-
-		// DataBse ddata
 		err := a.db.Database("go-ecomm").Collection("users").FindOne(ctx, find_user).Decode(&user)
 		if err != nil {
 			err_chan <- err
