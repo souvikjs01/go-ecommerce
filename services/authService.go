@@ -15,7 +15,7 @@ import (
 )
 
 type AuthService interface {
-	SignUpService(req *request.SignupRequest) (*model.User, error)
+	SignUpService(req *request.SignupRequest) (*model.User, string, error)
 	LoginService(payload request.LoginRequest) (*model.User, string, error)
 }
 
@@ -30,18 +30,18 @@ func NewAuthService(Db *mongo.Client) *AuthServiceStruct {
 }
 
 // Signup Service
-func (a *AuthServiceStruct) SignUpService(req *request.SignupRequest) (*model.User, error) {
+func (a *AuthServiceStruct) SignUpService(req *request.SignupRequest) (*model.User, string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	validGenders := map[string]bool{"male": true, "female": true, "other": true}
 	if !validGenders[req.Gender] {
-		return nil, fmt.Errorf("invalid gender: must be male, female, or other")
+		return nil, "", fmt.Errorf("invalid gender: must be male, female, or other")
 	}
 
 	if req.Username == "" || req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" {
-		return nil, errors.New("missing required fields")
+		return nil, "", errors.New("missing required fields")
 	}
 	newUser := model.NewUser(
 		&req.Username,
@@ -102,11 +102,15 @@ func (a *AuthServiceStruct) SignUpService(req *request.SignupRequest) (*model.Us
 	}()
 	select {
 	case err := <-errChan:
-		return nil, err
+		return nil, "", err
 	case res_user := <-userChan:
-		return &res_user, nil
+		token, err := utils.CreateJWTToken(res_user.ID.Hex(), res_user.Username, res_user.IsAdmin)
+		if err != nil {
+			return nil, "", err
+		}
+		return &res_user, token, nil
 	case <-ctx.Done():
-		return nil, context.DeadlineExceeded
+		return nil, "", context.DeadlineExceeded
 	}
 }
 

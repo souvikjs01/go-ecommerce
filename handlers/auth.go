@@ -44,7 +44,7 @@ func (h *AuthHandlerStruct) Signup(ctx *gin.Context) {
 	err_chan := make(chan *model.ErrMsg, 32)
 
 	go func() {
-		user, err := h.services.SignUpService(user)
+		user, token, err := h.services.SignUpService(user)
 		if err != nil {
 			err_chan <- &model.ErrMsg{
 				Err:  err,
@@ -52,6 +52,16 @@ func (h *AuthHandlerStruct) Signup(ctx *gin.Context) {
 			}
 			return
 		}
+		ctx.SetCookie(
+			"authCookie_golang",
+			token,
+			3600,
+			"/",
+			"localhost",
+			false,
+			true,
+		)
+
 		user_chan <- user
 	}()
 
@@ -156,7 +166,16 @@ func (h *AuthHandlerStruct) Login(ctx *gin.Context) {
 // Logout Hanler
 func (h *AuthHandlerStruct) Logout(ctx *gin.Context) {
 	// clear the cookie
-	ctx.SetCookie("authCookie_golang", "", -1, "/", "localhost", false, true)
+	ctx.SetCookie(
+		"authCookie_golang",
+		"",
+		-1,
+		"/",
+		"localhost",
+		false,
+		true,
+	)
+
 	redis_client := utils.GetRedis()
 
 	userID := ctx.GetString("userId")
